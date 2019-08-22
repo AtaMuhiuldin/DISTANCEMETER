@@ -35,9 +35,13 @@ export default class App extends Component {
       totalPrice: 0, 
       subCharges: 0,
       watingCharges: 0,
-      basePrice: 3.5, 
+      basePrice: 3.73, 
       incriment: 0.25,
       waitingTime: 0.00,
+      seconds: 0,
+
+      distanceMileStone: 130, 
+      delayMileStone: 35
       
 
     }
@@ -61,19 +65,20 @@ export default class App extends Component {
   }
   setStartState = (value) => {
     if(value){
-      this.setState({totalPrice: 3.5});
+      this.setState({totalPrice: 3.73});
       this.setState({waitingTime: 0});
       this.setState({subCharges: 0});
       this.setState({distance: 0});
       this.setState({waitingPrice: 0})
-      
-      
+      this.setState({seconds: 1})
+      this.setState({moving: true});
       
       navigator.geolocation.getCurrentPosition(position =>  this.setState({previousLocation: {longitude: position.coords.longitude, latitude: position.coords.latitude }}))
        this.intervalFunction = setInterval(this.updateLocation, 5000);
     }else{
       clearInterval(this.intervalFunction);
       clearInterval( this.waitingIntervalFunction);
+     
     }
     this.setState({start: value})
   }
@@ -97,27 +102,35 @@ export default class App extends Component {
         this.updateMatrix(position.coords);
         
         this.setState({previousLocation: {longitude: position.coords.longitude, latitude: position.coords.latitude }});
-        // axios.get("https://maps.googleapis.com/maps/api/distancematrix/json?units=imperial&origins=Washington,DC&destinations=New+York+City,NY&key=AIzaSyCqlkbEzvammpE4tjf0DqsAw36mdnfyAVE")
-        //     .then(res =>{
-        //       console.log("RESPONSE");
-        //       // console.log(res.data.rows[0].element[0].distance);
-        //       // console.log(distance);
-        //       // console.log(duration);
-        //       console.log(res.data.rows);
-        //       this.updateMatrix(position.coords)
-        //     }).catch(err =>{
-        //       console.log(err);
-        //     })
-  
-        
-        
-        // this.updateLocation();
       },
       (error) => this.setState({ error: error.message }),
-      { enableHighAccuracy: false, timeout: 200000, maximumAge: 1000 },
+      { enableHighAccuracy: true, timeout: 200000, maximumAge: 1000 },
     );
   }
   
+  calculateDistanceCost = (d1, d2) => {
+   let md1 = d1.toFixed(3)*1000;
+  let md2 = md1+d2;
+    if(md2-md1 !== 0){
+      for (let index = md1; index <= md2; index++) {
+          md1++;
+          if(md1%this.state.distanceMileStone === 0){
+            this.setState({subCharges: this.state.subCharges+0.25});
+          }
+      }
+    }
+  }
+
+  calculateWaitingCost = () => {
+    if(this.state.seconds%this.state.delayMileStone === 0){
+      this.setState({watingCharges: this.state.watingCharges+this.state.incriment})
+    }
+  }
+
+  calculateTotalCost = () => {
+    this.setState({totalPrice: this.state.subCharges+ this.state.watingCharges+ this.state.basePrice});
+  }
+
   updateMatrix = (coords) =>{
     console.log("Calculating .... ");
     console.log(coords);
@@ -126,23 +139,33 @@ export default class App extends Component {
 
     console.log(`logn ${longi} latti: ${latti}`);
     let distance = haversine(this.state.previousLocation , {longitude: longi, latitude: latti }, {unit: 'meter'});
+  
+
     if(distance<=0){
-     if(this.state.moving){ /// if moving is true initially then 
-       this.waitingIntervalFunction = setInterval(() => this.setState({waitingTime: this.state.waitingTime+0.01}), 1000 );
-     }
+      if(this.state.moving){
+       this.waitingIntervalFunction = setInterval(() => {
+         this.setState({waitingTime: this.state.waitingTime+0.01})
+          this.setState({seconds: this.state.seconds+1});
+          this.calculateWaitingCost();
+      }, 1000 );
+    }
       this.setState({moving: false});
       
     }else{
       clearInterval( this.waitingIntervalFunction);
       this.setState({moving: true});
-      this.setState({distance: this.state.distance+distance});
-      this.setState({watingCharges: ((this.state.waitingTime/0.25)*0.25) });
-      this.setState({subCharges: ((this.state.distance / 120)*this.state.incriment)});
-      this.setState({totalPrice: this.state.basePrice+ ((this.state.distance / 120)*this.state.incriment)+ ((this.state.waitingTime/0.25)*0.25) })
+      this.setState({distance: this.state.distance+(distance/1000)});
+      this.calculateDistanceCost(this.state.distance, distance);/// first is distance in KM second is delta in meters
+      // this.setState({watingCharges: ((this.state.waitingTime/0.25)*0.25) });
+      // this.setState({subCharges: ((this.state.distance / 130)*this.state.incriment)});
+      console.log("Price");
+      // console.log(this.state.basePrice+ ((this.state.distance / 130)*this.state.incriment));
+      // this.setState({totalPrice: this.state.basePrice+ ((this.state.distance / 130)*this.state.incriment) })
     }
     console.log(distance);
     console.log("MyDistance");
     console.log(distance);
+    this.calculateTotalCost();
   }
 
   render() {
@@ -153,7 +176,7 @@ export default class App extends Component {
                 <Text style={{fontSize: 25, color: "white"}}>DistanceMeter</Text>
             </View>
             <View style={{flex: 6}}>
-                <Text style={{fontSize: 70, alignSelf:"center"}}>{this.state.totalPrice.toFixed(2)}</Text>
+                <Text style={{fontSize: 70, alignSelf:"center"}}>${this.state.totalPrice.toFixed(2)}</Text>
             </View>
           </View>
           <View style={styles.row1}>
@@ -163,7 +186,7 @@ export default class App extends Component {
                     <Text style={styles.row1BoxItemUpperText}>DIST.</Text>
                   </View>
                   <View style={styles.row1BoxItemBottom}>
-                    <Text style={styles.row1BoxItemBottomText}>{this.state.distance.toFixed(3)}</Text>
+                    <Text style={styles.row1BoxItemBottomText}>{this.state.distance.toFixed(2)}</Text>
                   </View>
                 </View>
                 <View style={styles.row1BoxItem}>
